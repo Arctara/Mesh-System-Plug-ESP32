@@ -1,44 +1,29 @@
-/*
-    PINOUT
-      PIN 2 = RELAY 1
-      PIN 0 = RELAY 2
-      PIN 16 = RELAY 3
-      PIN 4 = RELAY 4
-      PIN 1 = RELAY 5
-
-      PIN 13 = SWITCH 1
-      PIN 3 = SWITCH 2
-      PIN 5 = SWITCH 3
-      PIN 12 = SWITCH 4
-      PIN 14 = SWITCH 5
-*/
-
 //$ Include Library
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WebSocketsClient.h>
-// #include <painlessMesh.h>
-
-//$ Mesh Configuration
-// #define MESH_PREFIX "ALiVe_MESH"
-// #define MESH_PASSWORD "TmlhdCBzZWthbGkgYW5kYSBtZW5kZWNvZGUgaW5pIC1NZXJ6YQ=="
-// #define MESH_PORT 5555
 
 //$ Access Point Configuration
 #define WIFI_SSID "ALiVe_AP"
 #define WIFI_PASS "LeTS_ALiVe"
 
-#define RELAY_IN1 16  // 2 = RELAY 2 = RELAY 4 <== RELAY 1
-#define RELAY_IN2 4   // 0 = RELAY 3 = RELAY 3 <== RELAY 2
-#define RELAY_IN3 0   // 16 = RELAY 5 = RELAY 1 <== RELAY 3
-#define RELAY_IN4 2   // 4 = RELAY 4 = RELAY 2 <== RELAY 4
-#define RELAY_IN5 1   // 1 = RELAY 1 = RELAY 5 <== RELAY 5
+#define RELAY_IN1 16
+#define RELAY_IN2 17
+#define RELAY_IN3 18
+#define RELAY_IN4 19
+#define RELAY_IN5 21
 
-#define SWITCH1 5   // 13
-#define SWITCH2 3   // 3
-#define SWITCH3 13  // 5
-#define SWITCH4 12  // 12
-#define SWITCH5 14  // 14
+#define SWITCH1 32
+#define SWITCH2 33
+#define SWITCH3 25
+#define SWITCH4 27
+#define SWITCH5 14
+
+#define OPT1 13
+#define OPT2 4
+#define OPT3 26
+#define OPT4 22
+#define OPT5 23
 
 int pinout[5] = {
     RELAY_IN1, RELAY_IN2, RELAY_IN3, RELAY_IN4, RELAY_IN5,
@@ -46,6 +31,10 @@ int pinout[5] = {
 
 int buttons[5] = {
     SWITCH1, SWITCH2, SWITCH3, SWITCH4, SWITCH5,
+};
+
+int optocouplers[5] = {
+    OPT1, OPT2, OPT3, OPT4, OPT5,
 };
 
 int buttonsCondition[5] = {
@@ -56,11 +45,27 @@ bool relayConditions[5] = {
     false, false, false, false, false,
 };
 
+bool feedbacks[5] = {
+    false, false, false, false, false,
+};
+
 int lastButtonsCondition[5] = {
     HIGH, HIGH, HIGH, HIGH, HIGH,
 };
 
+bool lastFeedback[5] = {
+    false, false, false, false, false,
+};
+
 unsigned long lastDebounceTime[5] = {
+    0, 0, 0, 0, 0,
+};
+
+bool hasRising[5] = {
+    false, false, false, false, false,
+};
+
+unsigned long prevMillis[5] = {
     0, 0, 0, 0, 0,
 };
 
@@ -73,12 +78,11 @@ int switchsLength = sizeof(buttons) / sizeof(buttons[0]);
 //$ Kalkulasi panjang array
 int relayConditionLength = sizeof(relayConditions) / sizeof(relayConditions[0]);
 
-unsigned long debounceDelay = 50;
+//$ Kalkulasi panjang array
+int optocouplersLength = sizeof(optocouplers) / sizeof(optocouplers[0]);
 
-//*Mesh Configuration
-// Scheduler userScheduler;
-// painlessMesh mesh;
-// int nodeNumber = 1;
+int debounceDelay = 50;
+unsigned long interval = 1000;
 
 String child = "";
 bool plugCondition = false;
@@ -90,17 +94,9 @@ DynamicJsonDocument receivedData(1024);
 
 void sendMessage();
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);
-// Task taskSendMessage(TASK_SECOND * 1, TASK_FOREVER, &sendMessage);
-
-//$ Needed for painless mesh library
-// void receivedCallback(uint32_t from, String &msg);
-// void newConnectionCallback(uint32_t nodeId);
-// void changedConnectionCallback();
-// void nodeTimeAdjustedCallback(int32_t offset);
 
 void setup() {
   Serial.begin(115200);
-  // mesh.setDebugMsgTypes(ERROR | STARTUP);
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED && millis() <= 15000) {
@@ -112,26 +108,21 @@ void setup() {
     pinMode(pinout[i], OUTPUT);
     digitalWrite(pinout[i], HIGH);
   }
+
   for (int i = 0; i < switchsLength; i++) {
     pinMode(buttons[i], INPUT_PULLUP);
+  }
+
+  for (int i = 0; i < optocouplersLength; i++) {
+    pinMode(optocouplers[i], INPUT_PULLUP);
   }
 
   webSocket.begin("192.168.5.1", 80, "/ws");
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000);
-
-  // mesh.init(MESH_PREFIX, MESH_PASSWORD, &userScheduler, MESH_PORT);
-  // mesh.onReceive(&receivedCallback);
-  // mesh.onNewConnection(&newConnectionCallback);
-  // mesh.onChangedConnections(&changedConnectionCallback);
-  // mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
-
-  // userScheduler.addTask(taskSendMessage);
-  // taskSendMessage.enable();
 }
 
 void loop() {
-  // mesh.update();
   webSocket.loop();
   for (int i = 0; i < relayConditionLength; i++) {
     int reading = digitalRead(buttons[i]);
@@ -146,16 +137,37 @@ void loop() {
 
         if (buttonsCondition[i] == LOW) {
           relayConditions[i] = !relayConditions[i];
-          child = "plug-" + String(i + 1);
-          plugCondition = relayConditions[i];
-          sendMessage();
         }
       }
     }
 
-    digitalWrite(pinout[i], !relayConditions[i]);
-
     lastButtonsCondition[i] = reading;
+
+    if (hasRising[i] == false) {
+      feedbacks[i] = digitalRead(optocouplers[i]);
+
+      if (feedbacks[i] == true) {
+        feedbacks[i] = true;
+        child = "plug-" + String(i + 1);
+        plugCondition = feedbacks[i];
+        hasRising[i] = true;
+        sendMessage();
+      }
+    }
+
+    if (hasRising[i] == true && relayConditions[i] == false) {
+      feedbacks[i] = digitalRead(optocouplers[i]);
+
+      if (feedbacks[i] == false) {
+        feedbacks[i] = false;
+        child = "plug-" + String(i + 1);
+        plugCondition = feedbacks[i];
+        hasRising[i] = false;
+        sendMessage();
+      }
+    }
+
+    digitalWrite(pinout[i], !relayConditions[i]);
   }
 }
 
@@ -167,7 +179,6 @@ void sendMessage() {
   String msg;
   serializeJson(data, msg);
   webSocket.sendTXT(msg);
-  // mesh.sendBroadcast(msg);
 }
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -180,92 +191,59 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     String to = receivedData["to"].as<String>();
     String condition = receivedData["condition"].as<String>();
 
-    Serial.println(myData);
-    Serial.println(from);
-    Serial.println(to);
-    Serial.println(condition);
-
     if (from == "center") {
       Serial.println("Data from center!");
       if (to == "plug-1") {
         Serial.println("Data is for this device!");
         child = "plug-1";
         if (condition == "1") {
-          relayConditions[0] = true;
+          // relayConditions[0] = true;
           Serial.println("True!");
         } else {
-          relayConditions[0] = false;
+          // relayConditions[0] = false;
           Serial.println("False!");
         }
       } else if (to == "plug-2") {
         Serial.println("Data is for this device!");
         child = "plug-2";
         if (condition == "1") {
-          relayConditions[1] = true;
+          // relayConditions[1] = true;
           Serial.println("True!");
         } else {
-          relayConditions[1] = false;
+          // relayConditions[1] = false;
           Serial.println("False!");
         }
       } else if (to == "plug-3") {
         Serial.println("Data is for this device!");
         child = "plug-3";
         if (condition == "1") {
-          relayConditions[2] = true;
+          // relayConditions[2] = true;
           Serial.println("True!");
         } else {
-          relayConditions[2] = false;
+          // relayConditions[2] = false;
           Serial.println("False!");
         }
       } else if (to == "plug-4") {
         Serial.println("Data is for this device!");
         child = "plug-4";
         if (condition == "1") {
-          relayConditions[3] = true;
+          // relayConditions[3] = true;
           Serial.println("True!");
         } else {
-          relayConditions[3] = false;
+          // relayConditions[3] = false;
           Serial.println("False!");
         }
       } else if (to == "plug-5") {
         Serial.println("Data is for this device!");
         child = "plug-5";
         if (condition == "1") {
-          relayConditions[4] = true;
+          // relayConditions[4] = true;
           Serial.println("True!");
         } else {
-          relayConditions[4] = false;
+          // relayConditions[4] = false;
           Serial.println("False!");
         }
       }
     }
   }
 }
-
-//$ Needed for painless mesh library
-// void receivedCallback(uint32_t from, String &msg) {
-//   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
-//   deserializeJson(receivedData, msg);
-//   if (data["from"].as<String>() == "center" &&
-//       data["to"].as<String>() == "lamp-1") {
-//     if (data["condition"].as<String>() == "true") {
-//       plugCondition = true;
-//       dimmer.setState(ON);
-//     } else {
-//       plugCondition = false;
-//       dimmer.setState(OFF);
-//     }
-//   }
-//   sendMessage();
-// }
-
-// void newConnectionCallback(uint32_t nodeId) {
-//   Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
-// }
-
-// void changedConnectionCallback() { Serial.printf("Changed connections\n"); }
-
-// void nodeTimeAdjustedCallback(int32_t offset) {
-//   Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),
-//   offset);
-// }
