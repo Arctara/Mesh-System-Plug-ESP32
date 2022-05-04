@@ -84,7 +84,7 @@ int optocouplersLength = sizeof(optocouplers) / sizeof(optocouplers[0]);
 int debounceDelay = 50;
 unsigned long interval = 1000;
 
-String child = "";
+String socket = "";
 bool plugCondition = false;
 
 WebSocketsClient webSocket;
@@ -92,6 +92,7 @@ WebSocketsClient webSocket;
 DynamicJsonDocument data(1024);
 DynamicJsonDocument receivedData(1024);
 
+String getValue(String data, char separator, int index);
 void sendMessage();
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);
 
@@ -146,21 +147,21 @@ void loop() {
     if (hasRising[i] == false) {
       feedbacks[i] = digitalRead(optocouplers[i]);
 
-      if (feedbacks[i] == true) {
+      if (feedbacks[i] == true && relayConditions[i] == true) {
         feedbacks[i] = true;
-        child = "plug-" + String(i + 1);
+        socket = "socket-" + String(i + 1);
         plugCondition = feedbacks[i];
         hasRising[i] = true;
         sendMessage();
       }
     }
 
-    if (hasRising[i] == true && relayConditions[i] == false) {
+    if (hasRising[i] == true) {
       feedbacks[i] = digitalRead(optocouplers[i]);
 
-      if (feedbacks[i] == false) {
+      if (feedbacks[i] == false && relayConditions[i] == false) {
         feedbacks[i] = false;
-        child = "plug-" + String(i + 1);
+        socket = "socket-" + String(i + 1);
         plugCondition = feedbacks[i];
         hasRising[i] = false;
         sendMessage();
@@ -171,9 +172,25 @@ void loop() {
   }
 }
 
+String getValue(String data, char separator, int index) {
+  int found = 0;
+  int strIndex[] = {0, -1};
+  int maxIndex = data.length() - 1;
+
+  for (int i = 0; i <= maxIndex && found <= index; i++) {
+    if (data.charAt(i) == separator || i == maxIndex) {
+      found++;
+      strIndex[0] = strIndex[1] + 1;
+      strIndex[1] = (i == maxIndex) ? i + 1 : i;
+    }
+  }
+
+  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
+}
+
 void sendMessage() {
-  data["from"] = "plugFamily";
-  data["child"] = child;
+  data["from"] = "plug-1";
+  data["socket"] = socket;
   data["to"] = "center";
   data["condition"] = plugCondition;
   String msg;
@@ -193,55 +210,56 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 
     if (from == "center") {
       Serial.println("Data from center!");
-      if (to == "plug-1") {
+      String deviceName = getValue(to, '/', 0);
+      String deviceSubName = getValue(to, '/', 1);
+
+      if (deviceName == "plug-1") {
         Serial.println("Data is for this device!");
-        child = "plug-1";
-        if (condition == "1") {
-          // relayConditions[0] = true;
-          Serial.println("True!");
-        } else {
-          // relayConditions[0] = false;
-          Serial.println("False!");
-        }
-      } else if (to == "plug-2") {
-        Serial.println("Data is for this device!");
-        child = "plug-2";
-        if (condition == "1") {
-          // relayConditions[1] = true;
-          Serial.println("True!");
-        } else {
-          // relayConditions[1] = false;
-          Serial.println("False!");
-        }
-      } else if (to == "plug-3") {
-        Serial.println("Data is for this device!");
-        child = "plug-3";
-        if (condition == "1") {
-          // relayConditions[2] = true;
-          Serial.println("True!");
-        } else {
-          // relayConditions[2] = false;
-          Serial.println("False!");
-        }
-      } else if (to == "plug-4") {
-        Serial.println("Data is for this device!");
-        child = "plug-4";
-        if (condition == "1") {
-          // relayConditions[3] = true;
-          Serial.println("True!");
-        } else {
-          // relayConditions[3] = false;
-          Serial.println("False!");
-        }
-      } else if (to == "plug-5") {
-        Serial.println("Data is for this device!");
-        child = "plug-5";
-        if (condition == "1") {
-          // relayConditions[4] = true;
-          Serial.println("True!");
-        } else {
-          // relayConditions[4] = false;
-          Serial.println("False!");
+        if (deviceSubName == "socket-1") {
+          socket = "socket-1";
+          if (condition == "1") {
+            relayConditions[0] = true;
+            Serial.println("Socket 1 => True!");
+          } else {
+            relayConditions[0] = false;
+            Serial.println("Socket 1 => False!");
+          }
+        } else if (deviceSubName == "socket-2") {
+          socket = "socket-2";
+          if (condition == "1") {
+            relayConditions[1] = true;
+            Serial.println("Socket 2 => True!");
+          } else {
+            relayConditions[1] = false;
+            Serial.println("Socket 2 => False!");
+          }
+        } else if (deviceSubName == "socket-3") {
+          socket = "socket-3";
+          if (condition == "1") {
+            relayConditions[2] = true;
+            Serial.println("Socket 3 => True!");
+          } else {
+            relayConditions[2] = false;
+            Serial.println("Socket 3 => False!");
+          }
+        } else if (deviceSubName == "socket-4") {
+          socket = "socket-4";
+          if (condition == "1") {
+            relayConditions[3] = true;
+            Serial.println("Socket 4 => True!");
+          } else {
+            relayConditions[3] = false;
+            Serial.println("Socket 4 => False!");
+          }
+        } else if (deviceSubName == "socket-5") {
+          socket = "socket-5";
+          if (condition == "1") {
+            relayConditions[4] = true;
+            Serial.println("Socket 5 => True!");
+          } else {
+            relayConditions[4] = false;
+            Serial.println("Socket 5 => False!");
+          }
         }
       }
     }
