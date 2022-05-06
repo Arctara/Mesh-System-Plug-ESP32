@@ -25,6 +25,10 @@
 #define OPT4 22
 #define OPT5 23
 
+//* Device Name
+const String deviceName = "plug-1";
+const String centerName = "center";
+
 int pinout[5] = {
     RELAY_IN1, RELAY_IN2, RELAY_IN3, RELAY_IN4, RELAY_IN5,
 };
@@ -189,9 +193,9 @@ String getValue(String data, char separator, int index) {
 }
 
 void sendMessage() {
-  data["from"] = "plug-1";
+  data["from"] = deviceName;
   data["socket"] = socket;
-  data["to"] = "center";
+  data["to"] = centerName;
   data["condition"] = plugCondition;
   String msg;
   serializeJson(data, msg);
@@ -208,7 +212,7 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     String to = receivedData["to"].as<String>();
     String condition = receivedData["condition"].as<String>();
 
-    if (from == "center") {
+    if (from == centerName) {
       Serial.println("Data from center!");
       String deviceName = getValue(to, '/', 0);
       String deviceSubName = getValue(to, '/', 1);
