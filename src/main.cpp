@@ -87,6 +87,7 @@ int optocouplersLength = sizeof(optocouplers) / sizeof(optocouplers[0]);
 
 int debounceDelay = 50;
 unsigned long interval = 1000;
+unsigned long lastScan = 0;
 
 String socket = "";
 bool plugCondition = false;
@@ -104,7 +105,7 @@ void setup() {
   Serial.begin(115200);
 
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED && millis() <= 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() <= 5000) {
     Serial.print(".");
     delay(500);
   }
@@ -129,6 +130,18 @@ void setup() {
 
 void loop() {
   webSocket.loop();
+
+  if (millis() - lastScan >= 2138) {
+    lastScan = millis();
+
+    if (webSocket.isConnected()) {
+      Serial.println("WebSocket Connected");
+    } else {
+      Serial.println("Connecting (Please Connect)");
+      webSocket.begin("192.168.5.1", 80, "/ws");
+    }
+  }
+
   for (int i = 0; i < relayConditionLength; i++) {
     int reading = digitalRead(buttons[i]);
 
@@ -157,6 +170,7 @@ void loop() {
         plugCondition = feedbacks[i];
         hasRising[i] = true;
         sendMessage();
+        delay(500);
       }
     }
 
@@ -169,6 +183,7 @@ void loop() {
         plugCondition = feedbacks[i];
         hasRising[i] = false;
         sendMessage();
+        delay(500);
       }
     }
 
@@ -263,6 +278,17 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
           } else {
             relayConditions[4] = false;
             Serial.println("Socket 5 => False!");
+          }
+        } else if (deviceSubName == "all") {
+          socket = "all";
+          if (condition == "1") {
+            for (int i = 0; i < 5; i++) {
+              relayConditions[i] = true;
+            }
+          } else {
+            for (int i = 0; i < 5; i++) {
+              relayConditions[i] = false;
+            }
           }
         }
       }
