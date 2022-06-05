@@ -131,7 +131,7 @@ void setup() {
 void loop() {
   webSocket.loop();
 
-  if (millis() - lastScan >= 2138) {
+  if (millis() - lastScan >= 11138) {
     lastScan = millis();
 
     if (webSocket.isConnected()) {
@@ -170,7 +170,6 @@ void loop() {
         plugCondition = feedbacks[i];
         hasRising[i] = true;
         sendMessage();
-        delay(500);
       }
     }
 
@@ -183,7 +182,6 @@ void loop() {
         plugCondition = feedbacks[i];
         hasRising[i] = false;
         sendMessage();
-        delay(500);
       }
     }
 
