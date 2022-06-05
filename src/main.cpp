@@ -207,8 +207,8 @@ String getValue(String data, char separator, int index) {
 
 void sendMessage() {
   data["from"] = deviceName;
-  data["socket"] = socket;
   data["to"] = centerName;
+  data["socket"] = socket;
   data["condition"] = plugCondition;
   String msg;
   serializeJson(data, msg);
