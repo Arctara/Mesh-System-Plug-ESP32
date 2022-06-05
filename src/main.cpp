@@ -91,6 +91,7 @@ unsigned long lastScan = 0;
 
 String socket = "";
 bool plugCondition = false;
+bool fromButton = false;
 
 WebSocketsClient webSocket;
 
@@ -103,12 +104,6 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);
 
 void setup() {
   Serial.begin(115200);
-
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED && millis() <= 5000) {
-    Serial.print(".");
-    delay(500);
-  }
 
   for (int i = 0; i < pinoutLength; i++) {
     pinMode(pinout[i], OUTPUT);
@@ -123,6 +118,12 @@ void setup() {
     pinMode(optocouplers[i], INPUT_PULLUP);
   }
 
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED && millis() <= 5000) {
+    Serial.print(".");
+    delay(500);
+  }
+
   webSocket.begin("192.168.5.1", 80, "/ws");
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000);
@@ -131,7 +132,7 @@ void setup() {
 void loop() {
   webSocket.loop();
 
-  if (millis() - lastScan >= 11138) {
+  if (millis() - lastScan >= 9172) {
     lastScan = millis();
 
     if (webSocket.isConnected()) {
@@ -209,6 +210,7 @@ void sendMessage() {
   data["from"] = deviceName;
   data["to"] = centerName;
   data["socket"] = socket;
+  data["fromButton"] = fromButton;
   data["condition"] = plugCondition;
   String msg;
   serializeJson(data, msg);
